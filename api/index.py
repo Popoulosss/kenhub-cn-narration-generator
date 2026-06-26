@@ -1,18 +1,26 @@
 """
 Kenhub Narration Generator — Vercel Python Function。
 
-api/index.py 在 Vercel 上默认暴露在 /api 路径（同时 /api/* 内部路由由 FastAPI 处理）。
-public/ 目录由 Vercel 自动作为静态资源服务。
+这是一个纯 Python 项目（无 /public 目录）：
+- / 与 /index.html  → 直接返回前端 HTML 字符串
+- /api/health       → 健康检查
+- /api/synthesize   → 创建 T2A 异步任务
+- /api/status/{id}  → 查询任务状态
+- /api/download/{id}→ 流式下载音频
+
+把 HTML 内嵌进 Python 的好处：Vercel 不会被「public/ 是静态站」这种推断干扰，
+函数一定会被识别和部署。
 """
 from __future__ import annotations
 
 import logging
+import pathlib
 from typing import AsyncIterator, Optional
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s | %(message)s")
 log = logging.getLogger("kenhub")
@@ -47,6 +55,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------- 前端 HTML 内嵌 ----------
+
+_HTML_FILE = pathlib.Path(__file__).resolve().parent.parent / "frontend" / "index.html"
+
+
+def _load_html() -> str:
+    """从仓库内的 frontend/index.html 读取 HTML。部署时随 git 一起打包。"""
+    try:
+        return _HTML_FILE.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return (
+            "<!doctype html><html><body style='font-family:monospace;padding:40px;background:#0E0E10;color:#F5F1E8'>"
+            "<h1>Kenhub Narration Generator</h1>"
+            "<p>API is running. Frontend HTML not bundled.</p>"
+            "<ul>"
+            "<li><a style='color:#FF6B35' href='/api/health'>/api/health</a></li>"
+            "<li><a style='color:#FF6B35' href='/api/synthesize'>/api/synthesize (POST)</a></li>"
+            "</ul></body></html>"
+        )
 
 
 # ---------- 校验 ----------
@@ -161,13 +190,10 @@ async def _raise_for_minimax(resp: httpx.Response, op: str) -> None:
 # ---------- 路由 ----------
 
 
-@app.get("/")
-async def root():
-    return {
-        "service": "kenhub-narration-generator",
-        "status": "ok",
-        "endpoints": ["/api/health", "/api/synthesize (POST)", "/api/status/{task_id}", "/api/download/{file_id}"],
-    }
+@app.get("/", response_class=HTMLResponse)
+@app.get("/index.html", response_class=HTMLResponse)
+async def index():
+    return _load_html()
 
 
 @app.get("/api/health")
