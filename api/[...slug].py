@@ -1,11 +1,15 @@
 """
-Kenhub Narration Generator — Vercel Serverless Function 入口。
+Kenhub Narration Generator — Vercel Serverless Catch-all Function。
 
-将浏览器对 /api/* 的请求转发到 MiniMax 异步语音合成相关接口。
-Vercel 会自动把 /api/* 的请求路由到本文件导出的 FastAPI app。
+文件命名 [...slug].py 是 Vercel Python 的 catch-all 模式：
+- 任何 /api/* 的请求都会被路由到本文件
+- ASGI scope 中的 path 字段保留原始路径
+- 我们把 FastAPI app 暴露出去，让 FastAPI 自己处理内部路由
 
-部署：与 backend/main.py 行为一致，仅去掉本地静态文件托管部分
-（静态文件交给 Vercel 的 public/ 目录托管）。
+部署结构：
+- api/[...slug].py    ← 本文件，FastAPI app 作为 serverless 函数
+- public/index.html   ← Vercel 自动作为静态资源服务
+- vercel.json         ← 只声明 build，无需 rewrites
 """
 from __future__ import annotations
 
@@ -38,7 +42,7 @@ ALLOWED_MODELS = {
 
 app = FastAPI(title="Kenhub Narration Generator (Vercel)", version="1.0.0")
 
-# Vercel 域名是 https://*.vercel.app；本地开发再加 localhost
+# 允许所有 *.vercel.app 子域与本地开发
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -246,12 +250,7 @@ async def status(task_id: str, authorization: Optional[str] = Header(default=Non
 
 @app.get("/api/download/{file_id}")
 async def download(file_id: int, authorization: Optional[str] = Header(default=None)):
-    """流式下载音频。
-
-    注意：Vercel Hobby 默认 10s 函数超时。MiniMax TTS 单次音频通常 < 5MB，
-    在 CDN 上下载一般 < 5s，绝大多数场景安全。
-    若遇到超时，可改为返回 download_url 让浏览器直连。
-    """
+    """流式下载音频。Vercel Hobby 默认 10s 超时，单次 MiniMax TTS 通常 < 5MB / < 5s。"""
     token = _extract_bearer(authorization)
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -272,11 +271,8 @@ async def download(file_id: int, authorization: Optional[str] = Header(default=N
         async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream("GET", download_url) as r:
                 if not r.is_success:
-                    body = await r.aread()
-                    raise HTTPException(
-                        status_code=r.status_code,
-                        detail=f"下载音频失败 HTTP {r.status_code}",
-                    )
+                    await r.aread()
+                    raise HTTPException(status_code=r.status_code, detail="下载音频失败")
                 async for chunk in r.aiter_bytes(chunk_size=64 * 1024):
                     yield chunk
 
