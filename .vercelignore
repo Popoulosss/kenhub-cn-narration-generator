@@ -1,0 +1,11 @@
+# 本地开发与 Vercel 无关的文件
+backend/.venv
+backend/__pycache__
+**/__pycache__
+*.pyc
+.trae
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.log

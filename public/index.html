@@ -1,0 +1,1032 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Kenhub Narration Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0E0E10;
+    --bg-soft: #16161A;
+    --bg-elev: #1C1C20;
+    --ink: #F5F1E8;
+    --ink-dim: #B7B0A2;
+    --ink-mute: #8B8680;
+    --line: #26262C;
+    --line-strong: #34343C;
+    --accent: #FF6B35;
+    --accent-soft: rgba(255, 107, 53, 0.12);
+    --accent-line: rgba(255, 107, 53, 0.35);
+    --ok: #6FCF97;
+    --warn: #F2C94C;
+    --err: #EB5757;
+    --serif: "Fraunces", "Source Serif Pro", Georgia, serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, ui-monospace, monospace;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --max: 880px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.55;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* 背景光晕 + 噪点 */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(1100px 460px at 80% -10%, rgba(255,107,53,0.10), transparent 60%),
+      radial-gradient(900px 420px at 0% 0%, rgba(120,90,255,0.05), transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: "";
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.94  0 0 0 0 0.91  0 0 0 0.045 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    opacity: 0.55;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  main {
+    position: relative;
+    z-index: 1;
+    max-width: var(--max);
+    margin: 0 auto;
+    padding: 56px 28px 96px;
+  }
+
+  /* ---------- 顶部 ---------- */
+  header.hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 36px;
+    opacity: 0;
+    transform: translateY(8px);
+    animation: fadeUp 600ms cubic-bezier(.2,.7,.2,1) 60ms forwards;
+  }
+  .hero h1 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: clamp(34px, 4.8vw, 54px);
+    letter-spacing: -0.015em;
+    margin: 0 0 8px;
+    line-height: 1.05;
+  }
+  .hero h1 em {
+    font-style: italic;
+    color: var(--accent);
+    font-weight: 400;
+  }
+  .hero .sub {
+    color: var(--ink-dim);
+    font-size: 13px;
+    letter-spacing: 0.02em;
+  }
+  .hero .right {
+    text-align: right;
+    color: var(--ink-mute);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .status-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--ink-mute);
+    margin-right: 6px;
+    vertical-align: middle;
+    box-shadow: 0 0 0 0 rgba(111,207,151,0);
+  }
+  .status-dot.ok { background: var(--ok); box-shadow: 0 0 0 4px rgba(111,207,151,0.10); }
+  .status-dot.warn { background: var(--warn); box-shadow: 0 0 0 4px rgba(242,201,76,0.10); }
+  .status-dot.err { background: var(--err); box-shadow: 0 0 0 4px rgba(235,87,87,0.10); }
+
+  /* ---------- 卡片 ---------- */
+  section.card {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px 24px 24px;
+    margin-bottom: 20px;
+    opacity: 0;
+    transform: translateY(10px);
+    animation: fadeUp 600ms cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  section.card:nth-of-type(1) { animation-delay: 140ms; }
+  section.card:nth-of-type(2) { animation-delay: 220ms; }
+  section.card:nth-of-type(3) { animation-delay: 300ms; }
+  section.card:nth-of-type(4) { animation-delay: 380ms; }
+  section.card:nth-of-type(5) { animation-delay: 460ms; }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+  .card-head h2 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 18px;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+  .card-head .meta {
+    font-size: 11px;
+    color: var(--ink-mute);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* ---------- 输入控件 ---------- */
+  label.field { display: block; margin-bottom: 14px; }
+  label.field > .label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 8px;
+  }
+  label.field > .label .val {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0;
+    color: var(--ink-dim);
+    text-transform: none;
+  }
+
+  input[type="text"], input[type="password"], textarea {
+    width: 100%;
+    background: var(--bg-elev);
+    border: 1px solid var(--line-strong);
+    color: var(--ink);
+    border-radius: var(--radius-sm);
+    padding: 11px 12px;
+    font: 500 13px/1.5 var(--mono);
+    transition: border-color 160ms, box-shadow 160ms, background 160ms;
+    outline: none;
+  }
+  select {
+    width: 100%;
+    background-color: var(--bg-elev);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'><path d='M1 1l4 4 4-4' stroke='%23B7B0A2' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    border: 1px solid var(--line-strong);
+    color: var(--ink);
+    border-radius: var(--radius-sm);
+    padding: 11px 38px 11px 14px;
+    font: 500 13px/1.5 var(--mono);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    transition: border-color 160ms, box-shadow 160ms, background-color 160ms;
+    outline: none;
+    cursor: pointer;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  textarea {
+    min-height: 220px;
+    resize: vertical;
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 1.65;
+    letter-spacing: 0.005em;
+    padding: 16px 18px;
+  }
+  textarea.over {
+    border-color: var(--err);
+    box-shadow: 0 0 0 3px rgba(235,87,87,0.12);
+  }
+
+  /* ---------- API Key 行 ---------- */
+  .apikey-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 8px;
+    align-items: center;
+  }
+  .apikey-row input { width: 100%; }
+
+  /* ---------- 网格 ---------- */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+  }
+  @media (max-width: 720px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .apikey-row { grid-template-columns: 1fr; }
+  }
+
+  /* ---------- 按钮 ---------- */
+  .btn {
+    appearance: none;
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    color: var(--ink);
+    font: 500 12px/1 var(--mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 11px 18px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: transform 120ms, box-shadow 160ms, background 160ms, border-color 160ms, color 160ms;
+  }
+  .btn:hover { transform: translateY(-1px); border-color: var(--accent-line); }
+  .btn:active { transform: translateY(0); }
+  .btn.primary {
+    background: var(--accent);
+    color: #16110A;
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+  .btn.primary:hover { background: #FF8255; box-shadow: 0 8px 22px -10px rgba(255,107,53,0.6); }
+  .btn.primary:disabled { background: #553122; color: #8B8680; border-color: #553122; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn.ghost { color: var(--ink-dim); }
+  .btn.tiny { padding: 7px 11px; font-size: 11px; }
+
+  /* ---------- 状态区 ---------- */
+  .control-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+  .state-line {
+    flex: 1 1 220px;
+    font-size: 12px;
+    color: var(--ink-dim);
+    min-height: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-elev);
+    color: var(--ink-dim);
+  }
+  .pill.processing { color: var(--warn); border-color: rgba(242,201,76,0.35); background: rgba(242,201,76,0.06); }
+  .pill.finished { color: var(--ok); border-color: rgba(111,207,151,0.35); background: rgba(111,207,151,0.06); }
+  .pill.failed { color: var(--err); border-color: rgba(235,87,87,0.35); background: rgba(235,87,87,0.06); }
+
+  /* ---------- 进度条 ---------- */
+  .progress {
+    margin-top: 14px;
+    height: 3px;
+    background: var(--bg-elev);
+    border-radius: 2px;
+    overflow: hidden;
+    display: none;
+  }
+  .progress.show { display: block; }
+  .progress > span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, var(--accent) 50%, transparent);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+  }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
+  }
+
+  /* ---------- 滑块 ---------- */
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 22px;
+    background: transparent;
+    margin: 0;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    background: var(--bg-elev);
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+    background-image: linear-gradient(90deg, var(--accent) var(--fill, 0%), transparent var(--fill, 0%));
+  }
+  input[type="range"]::-moz-range-track {
+    height: 4px;
+    background: var(--bg-elev);
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+  }
+  input[type="range"]::-moz-range-progress {
+    height: 4px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--ink);
+    border: 2px solid var(--accent);
+    margin-top: -7px;
+    cursor: grab;
+    transition: transform 120ms;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--ink);
+    border: 2px solid var(--accent);
+    cursor: grab;
+  }
+  input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); cursor: grabbing; }
+
+  /* ---------- 结果区 ---------- */
+  .result {
+    margin-top: 16px;
+    display: none;
+  }
+  .result.show { display: block; animation: fadeUp 360ms cubic-bezier(.2,.7,.2,1); }
+  .result-card {
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-elev);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .result-card.ok { border-color: rgba(111,207,151,0.35); background: rgba(111,207,151,0.05); }
+  .result-card.err { border-color: rgba(235,87,87,0.35); background: rgba(235,87,87,0.05); }
+  .result-meta { font-size: 12px; color: var(--ink-dim); }
+  .result-meta strong { color: var(--ink); font-weight: 600; }
+  .result-meta .small { font-size: 11px; color: var(--ink-mute); }
+
+  audio { height: 36px; width: 320px; max-width: 100%; filter: invert(0.92) hue-rotate(180deg); }
+
+  /* ---------- 发音替换 ---------- */
+  .tone-add {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .tone-arrow {
+    color: var(--ink-mute);
+    font-family: var(--mono);
+    font-size: 14px;
+    padding: 0 2px;
+  }
+  .tone-hint {
+    font-size: 11px;
+    color: var(--ink-mute);
+    margin-bottom: 12px;
+    line-height: 1.6;
+  }
+  .tone-hint code {
+    font-family: var(--mono);
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--ink-dim);
+    font-size: 11px;
+  }
+  .tone-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .tone-list li {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 9px 12px;
+    animation: fadeUp 220ms cubic-bezier(.2,.7,.2,1);
+  }
+  .tone-list .w {
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    overflow-wrap: anywhere;
+  }
+  .tone-list .arr {
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  .tone-list .r {
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    overflow-wrap: anywhere;
+  }
+  .tone-list .del {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--line-strong);
+    color: var(--ink-mute);
+    width: 26px; height: 26px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    transition: all 140ms;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tone-list .del:hover { color: var(--err); border-color: var(--err); background: rgba(235,87,87,0.06); }
+  .tone-empty {
+    font-size: 12px;
+    color: var(--ink-mute);
+    padding: 12px 0 4px;
+  }
+  .tone-empty.hidden { display: none; }
+  @media (max-width: 720px) {
+    .tone-add { grid-template-columns: 1fr; }
+    .tone-arrow { display: none; }
+    .tone-list li { grid-template-columns: 1fr auto; row-gap: 4px; }
+    .tone-list .arr { display: none; }
+  }
+
+  /* ---------- 字符计数 ---------- */
+  .counter {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--ink-mute);
+    letter-spacing: 0.04em;
+  }
+  .counter.over { color: var(--err); }
+
+  /* ---------- 页脚 ---------- */
+  footer.foot {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    color: var(--ink-mute);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* ---------- 杂项 ---------- */
+  ::selection { background: var(--accent); color: #16110A; }
+  hr.sep { border: 0; border-top: 1px dashed var(--line); margin: 18px 0; }
+</style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div>
+      <h1>Kenhub <em>Narration</em> Generator</h1>
+      <div class="sub">粘贴文本 → 调用 MiniMax T2A Async → 自动下载 MP3</div>
+    </div>
+    <div class="right">
+      <div><span id="conn-dot" class="status-dot"></span><span id="conn-text">未连接</span></div>
+      <div style="margin-top:6px;">v1.0 · FastAPI</div>
+    </div>
+  </header>
+
+  <!-- API Key -->
+  <section class="card">
+    <div class="card-head">
+      <h2>① API Key</h2>
+      <div class="meta">存于 localStorage</div>
+    </div>
+    <div class="apikey-row">
+      <input id="apikey" type="password" placeholder="eyJhbGciOi..." autocomplete="off" spellcheck="false" />
+      <button class="btn ghost tiny" id="toggle-key">显示</button>
+      <button class="btn ghost tiny" id="save-key">保存</button>
+      <button class="btn ghost tiny" id="clear-key">清除</button>
+    </div>
+  </section>
+
+  <!-- 文本 -->
+  <section class="card">
+    <div class="card-head">
+      <h2>② 待合成文本</h2>
+      <div class="meta">≤ 50,000 字符</div>
+    </div>
+    <textarea id="text" placeholder="在这里粘贴需要合成的中文或英文文本…&#10;&#10;支持的语气词（仅 speech-2.8 系列）：(laughs) (sighs) (breath) (coughs) ..."></textarea>
+    <div class="counter" id="counter">0 / 50,000</div>
+  </section>
+
+  <!-- 参数 -->
+  <section class="card">
+    <div class="card-head">
+      <h2>③ 声音参数</h2>
+      <div class="meta">voice / model / 语速 / 音量 / 音调</div>
+    </div>
+
+    <div class="grid-2">
+      <label class="field">
+        <div class="label"><span>voice_id</span></div>
+        <input id="voice_id" type="text" value="moss_audio_972c74bb-47a5-11f1-915a-0a14aa2b7ca7" />
+      </label>
+      <label class="field">
+        <div class="label"><span>model</span></div>
+        <select id="model">
+          <option value="speech-2.8-hd" selected>speech-2.8-hd</option>
+          <option value="speech-2.8-turbo">speech-2.8-turbo</option>
+          <option value="speech-2.6-hd">speech-2.6-hd</option>
+          <option value="speech-2.6-turbo">speech-2.6-turbo</option>
+          <option value="speech-02-hd">speech-02-hd</option>
+          <option value="speech-02-turbo">speech-02-turbo</option>
+          <option value="speech-01-hd">speech-01-hd</option>
+          <option value="speech-01-turbo">speech-01-turbo</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="grid-3">
+      <label class="field">
+        <div class="label"><span>语速 speed</span><span class="val" id="speed-val">1.00</span></div>
+        <input type="range" id="speed" min="0.5" max="2" step="0.05" value="1" />
+      </label>
+      <label class="field">
+        <div class="label"><span>音量 vol</span><span class="val" id="vol-val">1.0</span></div>
+        <input type="range" id="vol" min="0" max="10" step="0.1" value="1" />
+      </label>
+      <label class="field">
+        <div class="label"><span>音调 pitch</span><span class="val" id="pitch-val">0</span></div>
+        <input type="range" id="pitch" min="-12" max="12" step="1" value="0" />
+      </label>
+    </div>
+  </section>
+
+  <!-- 发音替换 / 注音 -->
+  <section class="card">
+    <div class="card-head">
+      <h2>④ 发音替换 / 注音</h2>
+      <div class="meta">pronunciation_dict.tone · <span id="tone-count">0</span> 条</div>
+    </div>
+    <div class="tone-add">
+      <input id="tone-word" type="text" placeholder="原文（如：危险 / omg）" autocomplete="off" />
+      <span class="tone-arrow">→</span>
+      <input id="tone-repl" type="text" placeholder="替换（如：dangerous / oh my god）" autocomplete="off" />
+      <button class="btn ghost tiny" id="tone-add-btn">+ 添加</button>
+    </div>
+    <div class="tone-hint">中文注音格式示例：<code>燕少飞/(yan4)(shao3)(fei1)</code> · 声调 1-4 表示一二三四声，5 表示轻声。</div>
+    <ul class="tone-list" id="tone-list"></ul>
+    <div class="tone-empty" id="tone-empty">尚未添加规则。留空 = 不启用发音替换。</div>
+  </section>
+
+  <!-- 控制 -->
+  <section class="card">
+    <div class="card-head">
+      <h2>⑤ 合成</h2>
+      <div class="meta">异步轮询 · 自动下载</div>
+    </div>
+    <div class="control-bar">
+      <span class="state-line" id="state-line">
+        <span class="pill" id="state-pill">等待</span>
+        <span id="state-text">填好文本与 Key 后点击「合成」开始</span>
+      </span>
+      <button class="btn ghost" id="cancel-btn" disabled>取消</button>
+      <button class="btn primary" id="synth-btn">合成</button>
+    </div>
+    <div class="progress" id="progress"><span></span></div>
+
+    <div class="result" id="result">
+      <div class="result-card" id="result-card">
+        <div class="result-meta" id="result-meta"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <audio id="audio" controls></audio>
+          <button class="btn tiny ghost" id="redownload-btn">再次下载</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>Kenhub × MiniMax · Local Tool</span>
+    <span id="foot-status">READY</span>
+  </footer>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- DOM ----------
+  const $ = (id) => document.getElementById(id);
+  const apikeyEl = $("apikey");
+  const textEl = $("text");
+  const counterEl = $("counter");
+  const voiceIdEl = $("voice_id");
+  const modelEl = $("model");
+  const speedEl = $("speed"), speedVal = $("speed-val");
+  const volEl = $("vol"), volVal = $("vol-val");
+  const pitchEl = $("pitch"), pitchVal = $("pitch-val");
+  const synthBtn = $("synth-btn");
+  const cancelBtn = $("cancel-btn");
+  const statePill = $("state-pill");
+  const stateText = $("state-text");
+  const progressEl = $("progress");
+  const resultEl = $("result");
+  const resultCard = $("result-card");
+  const resultMeta = $("result-meta");
+  const audioEl = $("audio");
+  const redownloadBtn = $("redownload-btn");
+  const connDot = $("conn-dot");
+  const connText = $("conn-text");
+  const footStatus = $("foot-status");
+  const toneWordEl = $("tone-word");
+  const toneReplEl = $("tone-repl");
+  const toneAddBtn = $("tone-add-btn");
+  const toneListEl = $("tone-list");
+  const toneEmptyEl = $("tone-empty");
+  const toneCountEl = $("tone-count");
+
+  const KEY_LS = "minimax_api_key";
+  const TONE_LS = "minimax_tone_rules";
+
+  // ---------- 持久化 ----------
+  function loadKey() {
+    const k = localStorage.getItem(KEY_LS) || "";
+    if (k) apikeyEl.value = k;
+    setConn(!!k);
+  }
+  function saveKey() {
+    const k = apikeyEl.value.trim();
+    if (!k) { alert("API Key 不能为空"); return; }
+    localStorage.setItem(KEY_LS, k);
+    setConn(true);
+    flash("API Key 已保存");
+  }
+  function clearKey() {
+    if (!confirm("确认清除已保存的 API Key？")) return;
+    localStorage.removeItem(KEY_LS);
+    apikeyEl.value = "";
+    setConn(false);
+    flash("API Key 已清除");
+  }
+
+  function setConn(ok) {
+    connDot.className = "status-dot " + (ok ? "ok" : "");
+    connText.textContent = ok ? "API Key 已就绪" : "未保存 API Key";
+  }
+
+  function flash(msg) {
+    footStatus.textContent = msg.toUpperCase();
+    setTimeout(() => { footStatus.textContent = "READY"; }, 1800);
+  }
+
+  // ---------- 显示/隐藏 Key ----------
+  let keyVisible = false;
+  $("toggle-key").addEventListener("click", () => {
+    keyVisible = !keyVisible;
+    apikeyEl.type = keyVisible ? "text" : "password";
+    $("toggle-key").textContent = keyVisible ? "隐藏" : "显示";
+  });
+  $("save-key").addEventListener("click", saveKey);
+  $("clear-key").addEventListener("click", clearKey);
+  apikeyEl.addEventListener("change", saveKey);
+
+  // ---------- 字符计数 ----------
+  function updateCounter() {
+    const n = [...textEl.value].length;
+    counterEl.textContent = `${n.toLocaleString()} / 50,000`;
+    counterEl.classList.toggle("over", n > 50000);
+    textEl.classList.toggle("over", n > 50000);
+  }
+  textEl.addEventListener("input", updateCounter);
+
+  // ---------- 滑块 ----------
+  function bindSlider(input, label, decimals) {
+    const sync = () => {
+      label.textContent = Number(input.value).toFixed(decimals);
+      const pct = ((+input.value - +input.min) / (+input.max - +input.min)) * 100;
+      input.style.setProperty("--fill", pct + "%");
+    };
+    input.addEventListener("input", sync);
+    sync();
+  }
+  bindSlider(speedEl, speedVal, 2);
+  bindSlider(volEl, volVal, 1);
+  bindSlider(pitchEl, pitchVal, 0);
+
+  // ---------- 发音替换 / 注音 ----------
+  /** @type {{word: string, repl: string}[]} */
+  let toneRules = loadTone();
+
+  function loadTone() {
+    try {
+      const raw = localStorage.getItem(TONE_LS);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+      return arr
+        .filter((r) => r && typeof r.word === "string" && typeof r.repl === "string")
+        .map((r) => ({ word: r.word, repl: r.repl }));
+    } catch { return []; }
+  }
+
+  function saveTone() {
+    localStorage.setItem(TONE_LS, JSON.stringify(toneRules));
+  }
+
+  function renderTone() {
+    toneListEl.innerHTML = "";
+    toneCountEl.textContent = toneRules.length.toString();
+    toneEmptyEl.classList.toggle("hidden", toneRules.length > 0);
+    toneRules.forEach((rule, idx) => {
+      const li = document.createElement("li");
+      const w = document.createElement("span");
+      w.className = "w";
+      w.textContent = rule.word;
+      const arr = document.createElement("span");
+      arr.className = "arr";
+      arr.textContent = "→";
+      const r = document.createElement("span");
+      r.className = "r";
+      r.textContent = rule.repl;
+      const del = document.createElement("button");
+      del.className = "del";
+      del.type = "button";
+      del.title = "删除此规则";
+      del.setAttribute("aria-label", `删除规则 ${rule.word}`);
+      del.textContent = "×";
+      del.addEventListener("click", () => {
+        toneRules.splice(idx, 1);
+        saveTone();
+        renderTone();
+      });
+      li.append(w, arr, r, del);
+      toneListEl.appendChild(li);
+    });
+  }
+
+  function addTone() {
+    const word = toneWordEl.value.trim();
+    const repl = toneReplEl.value.trim();
+    if (!word || !repl) {
+      flash("原文与替换均不能为空");
+      toneWordEl.focus();
+      return;
+    }
+    // 防止重复
+    const dupIdx = toneRules.findIndex((r) => r.word === word && r.repl === repl);
+    if (dupIdx >= 0) {
+      flash("已存在相同规则");
+      return;
+    }
+    toneRules.push({ word, repl });
+    saveTone();
+    renderTone();
+    toneWordEl.value = "";
+    toneReplEl.value = "";
+    toneWordEl.focus();
+  }
+
+  toneAddBtn.addEventListener("click", addTone);
+  [toneWordEl, toneReplEl].forEach((el) => {
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); addTone(); }
+    });
+  });
+
+  renderTone();
+
+  // ---------- 状态 ----------
+  function setState(kind, text) {
+    statePill.className = "pill " + kind;
+    stateText.textContent = text;
+  }
+
+  // ---------- 合成主流程 ----------
+  let pollTimer = null;  // 兼容旧引用，新逻辑在 pollUntilDone 内自管 timer
+  let currentTaskId = null;
+  let currentBlobUrl = null;
+  let aborting = false;
+
+  async function callApi(path, init = {}) {
+    const headers = new Headers(init.headers || {});
+    const key = apikeyEl.value.trim();
+    if (!key) throw new Error("缺少 API Key，请先填写并保存");
+    headers.set("Authorization", "Bearer " + key);
+    if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+    const resp = await fetch(path, { ...init, headers });
+    if (!resp.ok) {
+      let msg;
+      try { msg = (await resp.json()).error || resp.statusText; }
+      catch { msg = resp.statusText; }
+      throw new Error(`${resp.status} · ${msg}`);
+    }
+    return resp;
+  }
+
+  function resetUI() {
+    if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null; }
+    audioEl.removeAttribute("src");
+    resultEl.classList.remove("show");
+    resultCard.className = "result-card";
+  }
+
+  async function startSynth() {
+    const text = textEl.value.trim();
+    if (!text) { alert("请先粘贴需要合成的文本"); return; }
+    if ([...text].length > 50000) { alert("文本超过 50,000 字符限制"); return; }
+
+    resetUI();
+    aborting = false;
+    synthBtn.disabled = true;
+    cancelBtn.disabled = false;
+    progressEl.classList.add("show");
+    setState("processing", "正在创建任务…");
+
+    try {
+      // 1. 创建任务
+      const body = {
+        text,
+        voice_id: voiceIdEl.value.trim() || "moss_audio_972c74bb-47a5-11f1-915a-0a14aa2b7ca7",
+        model: modelEl.value,
+        speed: +speedEl.value,
+        vol: +volEl.value,
+        pitch: +parseInt(pitchEl.value, 10),
+      };
+      if (toneRules.length > 0) {
+        body.pronunciation_dict = {
+          tone: toneRules.map((r) => `${r.word}/${r.repl}`),
+        };
+      }
+      const resp = await callApi("/api/synthesize", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const { task_id } = await resp.json();
+      currentTaskId = task_id;
+      setState("processing", `任务已创建（#${task_id}），等待 MiniMax 排队…`);
+
+      // 2. 轮询状态
+      await pollUntilDone(task_id);
+      if (aborting) throw new Error("用户取消");
+
+      // 3. 下载音频
+      setState("processing", "合成完成，正在下载音频…");
+      const dl = await callApi(`/api/download/${fileIdForDownload}`, {});
+      const blob = await dl.blob();
+      const sizeKB = (blob.size / 1024).toFixed(1);
+      currentBlobUrl = URL.createObjectURL(blob);
+      audioEl.src = currentBlobUrl;
+      resultCard.classList.add("ok");
+      resultMeta.innerHTML = `<strong>${(blob.type || 'audio/mpeg')}</strong> · ${sizeKB} KB · 任务 #${currentTaskId}<br><span class="small">已自动开始下载；可点击右侧再次下载或直接试听</span>`;
+      resultEl.classList.add("show");
+
+      // 触发浏览器下载
+      triggerDownload(blob, `kenhub_narration_${currentTaskId}.mp3`);
+
+      setState("finished", `下载完成（${sizeKB} KB）`);
+    } catch (err) {
+      setState("failed", err.message || String(err));
+      resultCard.classList.add("err");
+      resultMeta.innerHTML = `<strong>合成失败</strong><br><span class="small">${(err.message || err).toString()}</span>`;
+      resultEl.classList.add("show");
+    } finally {
+      synthBtn.disabled = false;
+      cancelBtn.disabled = true;
+      progressEl.classList.remove("show");
+      currentTaskId = null;
+    }
+  }
+
+  let fileIdForDownload = null;
+  function pollUntilDone(taskId) {
+    return new Promise((resolve, reject) => {
+      const startedAt = Date.now();
+      let tickTimer = null;
+      let elapsedTimer = null;
+      let seconds = 0;
+
+      const cleanup = () => {
+        if (tickTimer) { clearTimeout(tickTimer); tickTimer = null; }
+        if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+      };
+
+      const updateElapsed = () => { seconds = Math.round((Date.now() - startedAt) / 1000); };
+
+      const tick = async () => {
+        if (aborting) { cleanup(); reject(new Error("用户取消")); return; }
+        try {
+          const r = await callApi(`/api/status/${taskId}`);
+          const data = await r.json();
+          if (data.status === "finished") {
+            fileIdForDownload = data.file_id;
+            cleanup();
+            resolve();
+          } else if (data.status === "failed") {
+            cleanup();
+            reject(new Error(`MiniMax 任务失败（${data.raw_status}）`));
+          } else {
+            setState("processing", `合成中（${data.raw_status || "processing"}），已等待 ${seconds}s…`);
+            tickTimer = setTimeout(tick, 2500);
+          }
+        } catch (err) {
+          cleanup();
+          reject(err);
+        }
+      };
+
+      elapsedTimer = setInterval(updateElapsed, 1000);
+      tick();
+    });
+  }
+
+  function triggerDownload(blob, filename) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(a.href);
+      a.remove();
+    }, 1000);
+  }
+
+  redownloadBtn.addEventListener("click", () => {
+    if (!currentBlobUrl) return;
+    const a = document.createElement("a");
+    a.href = currentBlobUrl;
+    a.download = `kenhub_narration_${currentTaskId || "audio"}.mp3`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+
+  synthBtn.addEventListener("click", startSynth);
+  cancelBtn.addEventListener("click", () => {
+    aborting = true;
+    pollTimer = null;
+    setState("failed", "已取消");
+  });
+
+  // ---------- 启动 ----------
+  loadKey();
+  updateCounter();
+})();
+</script>
+</body>
+</html>
